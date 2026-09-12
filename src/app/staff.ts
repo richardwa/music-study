@@ -226,6 +226,7 @@ export const StaffPage = () => {
   // regenerate on config change
   h("div").watch([staffMode, root, scaleMode], () => genNotes());
 
+  const staffDiv = h("div");
   const redraw = () => {
     staffDiv.el.innerHTML = staffSvg(
       notesSig.get(),
@@ -235,7 +236,7 @@ export const StaffPage = () => {
       badFlash.get(),
     );
   };
-  const staffDiv = h("div").watch([notesSig, cursor, labels, badFlash], redraw);
+  staffDiv.watch([notesSig, cursor, labels, badFlash], redraw);
 
   // --- midi ---
   let flashTimer: ReturnType<typeof setTimeout> | undefined;

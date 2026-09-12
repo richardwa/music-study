@@ -1,0 +1,21 @@
+{
+  "name": "music-study",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "format": "bun x prettier -w *.json *.ts ./src",
+    "prebuild": "bun run format",
+    "build": "tsc && vite build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.2",
+    "prettier": "^3.9.6",
+    "typescript": "7",
+    "vite": "^7.3.6"
+  },
+  "dependencies": {
+    "solid-vanilla": "github:richardwa/solid-vanilla#d758c02"
+  }
+}

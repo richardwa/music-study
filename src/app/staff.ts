@@ -77,7 +77,7 @@ const staffSvg = (notes: number[]) => {
   const braceH = STAFF2_BOTTOM - STAFF1_TOP;
   const brace = `<text transform="translate(10 ${STAFF2_BOTTOM}) scale(1 ${(braceH / (S * 4)).toFixed(3)})" font-size="${S * 4}" ${bold}>&#xE000;</text>`;
   const trebleClef = `<text x="26" y="${STAFF1_BOTTOM - S}" font-size="${S * 4}" ${bold}>&#xE050;</text>`;
-  const bassClef = `<text x="26" y="${STAFF2_TOP + S}" font-size="${S * 4}" ${bold}>&#xE062;</text>`;
+  const bassClef = `<text x="26" y="${STAFF2_TOP + S}" font-size="${S * 4.8}" ${bold}>&#xE062;</text>`;
   const joinTop = `<line x1="16" y1="${STAFF1_TOP}" x2="16" y2="${STAFF2_BOTTOM}" stroke="#000" stroke-width="1.2"/>`;
   const joinBottom = `<line x1="${VIEW_W - 16}" y1="${STAFF1_TOP}" x2="${VIEW_W - 16}" y2="${STAFF2_BOTTOM}" stroke="#000" stroke-width="1.2"/>`;
   const notesSvg = notes.map((n, i) => noteSvg(n, X0 + i * NOTE_DX)).join("");

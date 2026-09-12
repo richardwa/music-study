@@ -14,10 +14,6 @@ const NOTE_DX = 78;
 const NOTE_COUNT = 16;
 const NOTES_PER_SYSTEM = 8;
 const SYSTEM_GAP = 5 * S; // vertical gap between systems
-
-// staff positions within one system, relative to the system top
-const staffOffsetInSystem = (staff: "treble" | "bass", mode: StaffMode) =>
-  mode === "both" && staff === "bass" ? STAFF2_TOP - STAFF1_TOP : 0;
 const systemHeight = (mode: StaffMode) =>
   mode === "both" ? STAFF2_BOTTOM - STAFF1_TOP + SYSTEM_GAP : 9 * S;
 

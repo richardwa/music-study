@@ -11,7 +11,15 @@ const STAFF2_TOP = STAFF1_BOTTOM + 3 * S; // bass staff
 const STAFF2_BOTTOM = STAFF2_TOP + 4 * S;
 const X0 = 96;
 const NOTE_DX = 78;
-const NOTE_COUNT = 8;
+const NOTE_COUNT = 16;
+const NOTES_PER_SYSTEM = 8;
+const SYSTEM_GAP = 5 * S; // vertical gap between systems
+
+// staff positions within one system, relative to the system top
+const staffOffsetInSystem = (staff: "treble" | "bass", mode: StaffMode) =>
+  mode === "both" && staff === "bass" ? STAFF2_TOP - STAFF1_TOP : 0;
+const systemHeight = (mode: StaffMode) =>
+  mode === "both" ? STAFF2_BOTTOM - STAFF1_TOP + SYSTEM_GAP : 9 * S;
 
 // --- config ---
 type StaffMode = "treble" | "bass" | "both";
@@ -74,7 +82,6 @@ const stepOf = (n: number, staff: "treble" | "bass") =>
 
 const staffBottom = (staff: "treble" | "bass") =>
   staff === "treble" ? STAFF1_BOTTOM : STAFF2_BOTTOM;
-
 const noteName = (note: Note) => {
   const letter = ((note.n % 7) + 7) % 7;
   const octave = 4 + Math.floor(note.n / 7);
@@ -98,23 +105,38 @@ const ACC_GLYPH: Record<number, string> = { "1": "\uE262", "-1": "\uE260" };
 const ACC_CENTER: Record<number, number> = { "1": 1, "-1": 132 }; // vertical center above baseline, units
 
 // head position of a note at slot x
-const notePos = (note: Note, x: number, mode: StaffMode) => {
-  const step = stepOf(note.n, noteStaff(note.n, mode));
-  return { y: staffBottom(noteStaff(note.n, mode)) - step * (S / 2) };
+const notePos = (note: Note, x: number, mode: StaffMode, dy: number) => {
+  const staff = noteStaff(note.n, mode);
+  const step = stepOf(note.n, staff);
+  return {
+    y: staffBottom(staff) - step * (S / 2) + dy,
+  };
 };
 
-const cursorSvg = (note: Note, x: number, mode: StaffMode, bad: boolean) => {
-  const { y } = notePos(note, x, mode);
+const cursorSvg = (
+  note: Note,
+  x: number,
+  mode: StaffMode,
+  bad: boolean,
+  dy: number,
+) => {
+  const { y } = notePos(note, x, mode, dy);
   const w = S * 1.6;
   const h = S * 1.1;
   const color = bad ? "220,60,60" : "60,200,60";
   return `<rect x="${(x - w / 2).toFixed(1)}" y="${(y - h / 2).toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="rgba(${color},0.35)" stroke="rgb(${color})" stroke-width="1.5"/>`;
 };
 
-const noteSvg = (note: Note, x: number, mode: StaffMode, labels: boolean) => {
+const noteSvg = (
+  note: Note,
+  x: number,
+  mode: StaffMode,
+  labels: boolean,
+  dy: number,
+) => {
   const staff = noteStaff(note.n, mode);
   const step = stepOf(note.n, staff);
-  const y = staffBottom(staff) - step * (S / 2);
+  const y = staffBottom(staff) - step * (S / 2) + dy;
   const rx = S * 0.68;
   const ry = S * 0.48;
   const stemUp = step < 4; // below middle line
@@ -130,13 +152,12 @@ const noteSvg = (note: Note, x: number, mode: StaffMode, labels: boolean) => {
       ? ""
       : `<text x="${x - rx * 2.6}" y="${(y + (ACC_CENTER[note.acc] * accSize) / 1000).toFixed(1)}" font-size="${accSize}" ${FONT}>${ACC_GLYPH[note.acc]}</text>`;
   const labelY =
-    mode === "both"
-      ? staff === "treble"
+    staff === "treble"
+      ? mode === "both"
         ? STAFF2_TOP - S * 0.8
-        : STAFF2_BOTTOM + 4.4 * S
-      : staff === "treble"
-        ? STAFF1_BOTTOM + 4.4 * S
-        : STAFF2_BOTTOM + 4.4 * S;
+        : STAFF1_BOTTOM + 4.4 * S
+      : STAFF2_BOTTOM + 4.4 * S;
+  const labelYAbs = labelY - STAFF1_TOP + dy;
   return [
     ledger,
     acc,
@@ -144,7 +165,7 @@ const noteSvg = (note: Note, x: number, mode: StaffMode, labels: boolean) => {
     `<line x1="${stemX}" y1="${y}" x2="${stemX}" y2="${stemEnd}" stroke="#111" stroke-width="1.6"/>`,
     ...(labels
       ? [
-          `<text x="${x}" y="${labelY}" font-size="11" text-anchor="middle" fill="#666">${noteName(note)}</text>`,
+          `<text x="${x}" y="${labelYAbs}" font-size="11" text-anchor="middle" fill="#666">${noteName(note)}</text>`,
         ]
       : []),
   ].join("");
@@ -159,27 +180,48 @@ const staffSvg = (
   bad: boolean,
 ) => {
   const bold = FONT;
-  const single = mode !== "both";
-  const top1 = single && mode === "bass" ? STAFF2_TOP : STAFF1_TOP;
-  const bot = single ? staffBottom(mode) : STAFF2_BOTTOM;
-  const viewH = bot + 6 * S;
-  let out = staffLines(mode === "bass" ? STAFF2_TOP : STAFF1_TOP);
-  if (mode === "both") {
-    out += staffLines(STAFF2_TOP);
-    // brace spans the grand staff; SMuFL brace sits on its baseline at the
-    // bottom and extends exactly 1em (one staff height) upward — stretch to span
-    const braceH = STAFF2_BOTTOM - STAFF1_TOP;
-    out += `<text transform="translate(10 ${STAFF2_BOTTOM}) scale(1 ${(braceH / (S * 4)).toFixed(3)})" font-size="${S * 4}" ${bold}>&#xE000;</text>`;
+  const sysH = systemHeight(mode);
+  const sysCount = Math.max(1, Math.ceil(notes.length / NOTES_PER_SYSTEM));
+  const sysInner = mode === "both" ? STAFF2_BOTTOM - STAFF1_TOP : 4 * S;
+  const viewH = (sysCount - 1) * sysH + sysInner + 6 * S;
+  let out = "";
+  for (let k = 0; k < sysCount; k++) {
+    const dy = k * sysH;
+    const top1 = (mode === "bass" ? STAFF2_TOP - STAFF1_TOP : 0) + dy;
+    const bot =
+      (mode === "both"
+        ? STAFF2_BOTTOM - STAFF1_TOP
+        : mode === "bass"
+          ? 4 * S
+          : 4 * S) + dy;
+    out += staffLines((mode === "bass" ? STAFF2_TOP - STAFF1_TOP : 0) + dy);
+    if (mode === "both") {
+      out += staffLines(STAFF2_TOP - STAFF1_TOP + dy);
+      // brace spans the grand staff; SMuFL brace sits on its baseline at the
+      // bottom and extends exactly 1em (one staff height) upward — stretch to span
+      const braceH = STAFF2_BOTTOM - STAFF1_TOP;
+      out += `<text transform="translate(10 ${STAFF2_BOTTOM - STAFF1_TOP + dy}) scale(1 ${(braceH / (S * 4)).toFixed(3)})" font-size="${S * 4}" ${bold}>&#xE000;</text>`;
+    }
+    if (mode !== "bass")
+      out += `<text x="26" y="${4 * S - S + dy}" font-size="${S * 4}" ${bold}>&#xE050;</text>`;
+    if (mode !== "treble")
+      out += `<text x="26" y="${(mode === "both" ? STAFF2_TOP - STAFF1_TOP : 0) + S + dy}" font-size="${S * 4.4}" ${bold}>&#xE062;</text>`;
+    out += `<line x1="16" y1="${top1}" x2="16" y2="${bot}" stroke="#000" stroke-width="1.2"/>`;
+    out += `<line x1="${VIEW_W - 16}" y1="${top1}" x2="${VIEW_W - 16}" y2="${bot}" stroke="#000" stroke-width="1.2"/>`;
   }
-  out += `<text x="26" y="${STAFF1_BOTTOM - S}" font-size="${S * 4}" ${bold}>&#xE050;</text>`;
-  if (mode !== "treble")
-    out += `<text x="26" y="${STAFF2_TOP + S}" font-size="${S * 4.4}" ${bold}>&#xE062;</text>`;
-  out += `<line x1="16" y1="${top1}" x2="16" y2="${bot}" stroke="#000" stroke-width="1.2"/>`;
-  out += `<line x1="${VIEW_W - 16}" y1="${top1}" x2="${VIEW_W - 16}" y2="${bot}" stroke="#000" stroke-width="1.2"/>`;
-  if (cursor < notes.length)
-    out += cursorSvg(notes[cursor], X0 + cursor * NOTE_DX, mode, bad);
+  const noteAt = (i: number) => ({
+    x: X0 + (i % NOTES_PER_SYSTEM) * NOTE_DX,
+    dy: Math.floor(i / NOTES_PER_SYSTEM) * sysH,
+  });
+  if (cursor < notes.length) {
+    const { x, dy } = noteAt(cursor);
+    out += cursorSvg(notes[cursor], x, mode, bad, dy);
+  }
   out += notes
-    .map((n, i) => noteSvg(n, X0 + i * NOTE_DX, mode, labels))
+    .map((n, i) => {
+      const { x, dy } = noteAt(i);
+      return noteSvg(n, x, mode, labels, dy);
+    })
     .join("");
   return `<svg viewBox="0 0 ${VIEW_W} ${viewH}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:860px">${out}</svg>`;
 };

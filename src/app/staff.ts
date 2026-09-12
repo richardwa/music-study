@@ -327,7 +327,7 @@ export const StaffPage = () => {
       const t = ctx.currentTime;
       playTone(midi, t, NOTE_MS / 1000);
       sendMidi([0x90, midi, 90]);
-      sendMidi([0x80, midi, 0], (t + NOTE_MS / 1000) * 1000); // off at end of note
+      sendMidi([0x80, midi, 0], performance.now() + NOTE_MS); // off at end of note
       await sleep(NOTE_MS);
     }
     playing.set(false);

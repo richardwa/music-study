@@ -304,19 +304,15 @@ export const StaffPage = () => {
     osc.connect(gain).connect(ctx.destination);
     osc.start(t0);
     osc.stop(t0 + dur + 0.05);
-    return osc;
   };
 
   const playing = signal(false);
   const NOTE_MS = 450;
-  const COUNT_IN = 400;
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
   const sendMidi = (bytes: number[], timestampMs?: number) => {
     midiAccess?.outputs?.forEach((out: any) => out.send(bytes, timestampMs));
   };
-
-  let activeOscs: OscillatorNode[] = [];
 
   const playLine = async () => {
     if (playing.get()) return;
@@ -324,37 +320,17 @@ export const StaffPage = () => {
     const notes = notesSig.get();
     const ctx = (audioCtx ??= new AudioContext());
     if (ctx.state === "suspended") await ctx.resume();
-    // schedule the whole sequence up-front: audio, midi out, and cursor all
-    // derive from the same timeline so they can't drift apart
-    const t0 = ctx.currentTime + COUNT_IN / 1000;
-    const midi0 = performance.now() + COUNT_IN;
-    notes.forEach((n, i) => {
-      const midi = noteMidi(n);
-      activeOscs.push(
-        playTone(midi, t0 + (i * NOTE_MS) / 1000, NOTE_MS / 1000),
-      );
-      sendMidi([0x90, midi, 90], midi0 + i * NOTE_MS);
-      sendMidi([0x80, midi, 0], midi0 + (i + 1) * NOTE_MS);
-    });
-    cursor.set(0);
-    await sleep(COUNT_IN);
-    for (let i = 1; i < notes.length && playing.get(); i++) {
-      await sleep(NOTE_MS);
+    for (let i = 0; i < notes.length; i++) {
       if (!playing.get()) break;
+      const midi = noteMidi(notes[i]);
       cursor.set(i);
+      const t = ctx.currentTime;
+      playTone(midi, t, NOTE_MS / 1000);
+      sendMidi([0x90, midi, 90]);
+      sendMidi([0x80, midi, 0], (t + NOTE_MS / 1000) * 1000); // off at end of note
+      await sleep(NOTE_MS);
     }
-    if (playing.get()) {
-      await sleep(NOTE_MS); // let the last note finish
-      playing.set(false);
-      cursor.set(0);
-    }
-  };
-
-  const stopPlayback = () => {
     playing.set(false);
-    activeOscs.forEach((o) => o.stop());
-    activeOscs = [];
-    sendMidi([0xb0, 123, 0]); // all notes off
     cursor.set(0);
   };
 
@@ -363,7 +339,7 @@ export const StaffPage = () => {
     .watch(playing, () => {
       playBtn.el.textContent = playing.get() ? "Stop" : "Play";
     })
-    .on("click", () => (playing.get() ? stopPlayback() : playLine()));
+    .on("click", () => (playing.get() ? playing.set(false) : playLine()));
 
   return vbox().inner(
     Title().css("font-weight", "bold").inner("Grand Staff"),

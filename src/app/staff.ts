@@ -4,69 +4,91 @@ import { Title } from "./components";
 // --- staff geometry (px) ---
 const S = 12; // staff line spacing (one diatonic space)
 const VIEW_W = 840;
-const VIEW_H = 160;
-const STAFF_TOP = 45;
-const STAFF_BOTTOM = STAFF_TOP + 4 * S;
+const STAFF1_TOP = 40; // treble staff
+const STAFF1_BOTTOM = STAFF1_TOP + 4 * S;
+const STAFF2_TOP = STAFF1_BOTTOM + 3 * S; // bass staff
+const STAFF2_BOTTOM = STAFF2_TOP + 4 * S;
+const VIEW_H = STAFF2_BOTTOM + 6 * S;
 const X0 = 96;
 const NOTE_DX = 78;
 const NOTE_COUNT = 8;
 
-// diatonic steps relative to bottom staff line (E4 = 0)
-const C4 = -2;
-const C5 = 7;
+// diatonic index: C4 = 0, negative = below
+const MIN = -7; // C3
+const MAX = 7; // C5
 const NAMES = ["C", "D", "E", "F", "G", "A", "B"];
 
-const stepName = (step: number) => {
-  const i = step - C4;
-  return `${NAMES[i % 7]}${4 + Math.floor(i / 7)}`;
-};
+type Staff = "treble" | "bass";
 
-const randomSteps = (count: number) =>
+const noteStaff = (n: number): Staff => (n < 0 ? "bass" : "treble");
+
+// step relative to the staff's bottom line (even steps sit on lines)
+const stepOf = (n: number, staff: Staff) =>
+  staff === "treble" ? n + 2 : n + 10; // treble bottom = E4, bass bottom = G2
+
+const staffBottom = (staff: Staff) =>
+  staff === "treble" ? STAFF1_BOTTOM : STAFF2_BOTTOM;
+
+const noteName = (n: number) =>
+  `${NAMES[((n % 7) + 7) % 7]}${4 + Math.floor(n / 7)}`;
+
+const randomNotes = (count: number) =>
   Array.from(
     { length: count },
-    () => C4 + Math.floor(Math.random() * (C5 - C4 + 1)),
+    () => MIN + Math.floor(Math.random() * (MAX - MIN + 1)),
   );
 
-const noteSvg = (step: number, x: number) => {
-  const y = STAFF_BOTTOM - step * (S / 2);
+const staffLines = (top: number) =>
+  [0, 1, 2, 3, 4]
+    .map(
+      (i) =>
+        `<line x1="16" y1="${top + i * S}" x2="${VIEW_W - 16}" y2="${top + i * S}" stroke="#000" stroke-width="1.2"/>`,
+    )
+    .join("");
+
+const noteSvg = (n: number, x: number) => {
+  const staff = noteStaff(n);
+  const step = stepOf(n, staff);
+  const bottom = staffBottom(staff);
+  const y = bottom - step * (S / 2);
   const rx = S * 0.68;
   const ry = S * 0.48;
-  const stemUp = step < 3; // below middle line B4
+  const stemUp = step < 4; // below middle line
   const stemX = stemUp ? x + rx * 0.9 : x - rx * 0.9;
   const stemEnd = stemUp ? y - 3.4 * S : y + 3.4 * S;
   const ledger =
-    step <= -2
+    step <= -2 || step >= 10
       ? `<line x1="${x - rx * 1.7}" y1="${y}" x2="${x + rx * 1.7}" y2="${y}" stroke="#000" stroke-width="1.2"/>`
       : "";
+  const labelY =
+    staff === "treble" ? STAFF2_TOP - S * 0.8 : STAFF2_BOTTOM + 4.4 * S;
   return [
     ledger,
     `<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" transform="rotate(-20 ${x} ${y})" fill="#111"/>`,
     `<line x1="${stemX}" y1="${y}" x2="${stemX}" y2="${stemEnd}" stroke="#111" stroke-width="1.6"/>`,
-    `<text x="${x}" y="${STAFF_BOTTOM + 4.4 * S}" font-size="11" text-anchor="middle" fill="#666">${stepName(step)}</text>`,
+    `<text x="${x}" y="${labelY}" font-size="11" text-anchor="middle" fill="#666">${noteName(n)}</text>`,
   ].join("");
 };
 
-const staffSvg = (steps: number[]) => {
-  const lines = [0, 1, 2, 3, 4]
-    .map(
-      (i) =>
-        `<line x1="16" y1="${STAFF_TOP + i * S}" x2="${VIEW_W - 16}" y2="${STAFF_TOP + i * S}" stroke="#000" stroke-width="1.2"/>`,
-    )
-    .join("");
-  const clef = `<text x="26" y="${STAFF_BOTTOM - S * 0.1}" font-size="${S * 3.4}" fill="#000">&#x1D11E;</text>`;
-  const notes = steps.map((s, i) => noteSvg(s, X0 + i * NOTE_DX)).join("");
-  return `<svg viewBox="0 0 ${VIEW_W} ${VIEW_H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:860px">${lines}${clef}${notes}</svg>`;
+const staffSvg = (notes: number[]) => {
+  const brace = `<text x="12" y="${STAFF2_BOTTOM - S * 0.1}" font-size="${STAFF2_BOTTOM - STAFF1_TOP}" fill="#000">{</text>`;
+  const trebleClef = `<text x="26" y="${STAFF1_BOTTOM - S * 0.1}" font-size="${S * 3.4}" fill="#000">&#x1D11E;</text>`;
+  const bassClef = `<text x="26" y="${STAFF2_TOP + 3 * S}" font-size="${S * 3.4}" fill="#000">&#x1D122;</text>`;
+  const joinTop = `<line x1="16" y1="${STAFF1_TOP}" x2="16" y2="${STAFF2_BOTTOM}" stroke="#000" stroke-width="1.2"/>`;
+  const joinBottom = `<line x1="${VIEW_W - 16}" y1="${STAFF1_TOP}" x2="${VIEW_W - 16}" y2="${STAFF2_BOTTOM}" stroke="#000" stroke-width="1.2"/>`;
+  const notesSvg = notes.map((n, i) => noteSvg(n, X0 + i * NOTE_DX)).join("");
+  return `<svg viewBox="0 0 ${VIEW_W} ${VIEW_H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:860px">${staffLines(STAFF1_TOP)}${staffLines(STAFF2_TOP)}${brace}${trebleClef}${bassClef}${joinTop}${joinBottom}${notesSvg}</svg>`;
 };
 
 export const StaffPage = () => {
   const nonce = signal(0);
 
   const staff = h("div").watch(nonce, (n) => {
-    n.el.innerHTML = staffSvg(randomSteps(NOTE_COUNT));
+    n.el.innerHTML = staffSvg(randomNotes(NOTE_COUNT));
   });
 
   return vbox().inner(
-    Title().css("font-weight", "bold").inner("C Major — Staff"),
+    Title().css("font-weight", "bold").inner("C Major — Grand Staff"),
     staff,
     hbox().inner(
       button()

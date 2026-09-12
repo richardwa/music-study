@@ -53,7 +53,7 @@ const staffSvg = (steps: number[]) => {
         `<line x1="16" y1="${STAFF_TOP + i * S}" x2="${VIEW_W - 16}" y2="${STAFF_TOP + i * S}" stroke="#000" stroke-width="1.2"/>`,
     )
     .join("");
-  const clef = `<text x="24" y="${STAFF_BOTTOM - S * 0.3}" font-size="${S * 4}" fill="#000">&#x1D11E;</text>`;
+  const clef = `<text x="26" y="${STAFF_BOTTOM - S * 0.55}" font-size="${S * 3.4}" fill="#000">&#x1D11E;</text>`;
   const notes = steps.map((s, i) => noteSvg(s, X0 + i * NOTE_DX)).join("");
   return `<svg viewBox="0 0 ${VIEW_W} ${VIEW_H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:860px">${lines}${clef}${notes}</svg>`;
 };

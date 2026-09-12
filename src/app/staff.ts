@@ -12,11 +12,7 @@ const STAFF2_BOTTOM = STAFF2_TOP + 4 * S;
 const BOTTOM_PAD = 9 * S; // room for ledger notes + labels below bass staff
 const X0 = 104;
 const NOTE_DX = 78;
-const NOTE_COUNT = 16;
-const NOTES_PER_SYSTEM = 8;
-const SYSTEM_GAP = 12 * S; // vertical gap between systems
-const systemHeight = (mode: StaffMode) =>
-  mode === "both" ? STAFF2_BOTTOM - STAFF1_TOP + SYSTEM_GAP : 9 * S;
+const NOTE_COUNT = 8;
 
 // --- config ---
 type StaffMode = "treble" | "bass" | "both";
@@ -177,48 +173,27 @@ const staffSvg = (
   bad: boolean,
 ) => {
   const bold = FONT;
-  const sysH = systemHeight(mode);
-  const sysCount = Math.max(1, Math.ceil(notes.length / NOTES_PER_SYSTEM));
-  const sysInner = mode === "both" ? STAFF2_BOTTOM - STAFF1_TOP : 4 * S;
-  const viewH = (sysCount - 1) * sysH + sysInner + BOTTOM_PAD;
-  let out = "";
-  for (let k = 0; k < sysCount; k++) {
-    const dy = k * sysH;
-    const top1 = (mode === "bass" ? STAFF2_TOP - STAFF1_TOP : 0) + dy;
-    const bot =
-      (mode === "both"
-        ? STAFF2_BOTTOM - STAFF1_TOP
-        : mode === "bass"
-          ? 4 * S
-          : 4 * S) + dy;
-    out += staffLines((mode === "bass" ? STAFF2_TOP - STAFF1_TOP : 0) + dy);
-    if (mode === "both") {
-      out += staffLines(STAFF2_TOP - STAFF1_TOP + dy);
-      // brace spans the grand staff; SMuFL brace sits on its baseline at the
-      // bottom and extends exactly 1em (one staff height) upward — stretch to span
-      const braceH = STAFF2_BOTTOM - STAFF1_TOP;
-      out += `<text transform="translate(10 ${STAFF2_BOTTOM - STAFF1_TOP + dy}) scale(1 ${(braceH / (S * 4)).toFixed(3)})" font-size="${S * 4}" ${bold}>&#xE000;</text>`;
-    }
-    if (mode !== "bass")
-      out += `<text x="26" y="${4 * S - S + dy}" font-size="${S * 4}" ${bold}>&#xE050;</text>`;
-    if (mode !== "treble")
-      out += `<text x="26" y="${(mode === "both" ? STAFF2_TOP - STAFF1_TOP : 0) + S + dy}" font-size="${S * 4.4}" ${bold}>&#xE062;</text>`;
-    out += `<line x1="16" y1="${top1}" x2="16" y2="${bot}" stroke="#000" stroke-width="1.2"/>`;
-    out += `<line x1="${VIEW_W - 16}" y1="${top1}" x2="${VIEW_W - 16}" y2="${bot}" stroke="#000" stroke-width="1.2"/>`;
+  const top1 = mode === "bass" ? STAFF2_TOP : STAFF1_TOP;
+  const bot = mode === "both" ? STAFF2_BOTTOM : staffBottom(mode);
+  const viewH = bot + BOTTOM_PAD;
+  let out = staffLines(STAFF1_TOP);
+  if (mode === "both") {
+    out += staffLines(STAFF2_TOP);
+    // brace spans the grand staff; SMuFL brace sits on its baseline at the
+    // bottom and extends exactly 1em (one staff height) upward — stretch to span
+    const braceH = STAFF2_BOTTOM - STAFF1_TOP;
+    out += `<text transform="translate(10 ${STAFF2_BOTTOM}) scale(1 ${(braceH / (S * 4)).toFixed(3)})" font-size="${S * 4}" ${bold}>&#xE000;</text>`;
   }
-  const noteAt = (i: number) => ({
-    x: X0 + (i % NOTES_PER_SYSTEM) * NOTE_DX,
-    dy: Math.floor(i / NOTES_PER_SYSTEM) * sysH,
-  });
-  if (cursor < notes.length) {
-    const { x, dy } = noteAt(cursor);
-    out += cursorSvg(notes[cursor], x, mode, bad, dy);
-  }
+  if (mode !== "bass")
+    out += `<text x="26" y="${STAFF1_BOTTOM - S}" font-size="${S * 4}" ${bold}>&#xE050;</text>`;
+  if (mode !== "treble")
+    out += `<text x="26" y="${STAFF2_TOP + S}" font-size="${S * 4.4}" ${bold}>&#xE062;</text>`;
+  out += `<line x1="16" y1="${top1}" x2="16" y2="${bot}" stroke="#000" stroke-width="1.2"/>`;
+  out += `<line x1="${VIEW_W - 16}" y1="${top1}" x2="${VIEW_W - 16}" y2="${bot}" stroke="#000" stroke-width="1.2"/>`;
+  if (cursor < notes.length)
+    out += cursorSvg(notes[cursor], X0 + cursor * NOTE_DX, mode, bad, 0);
   out += notes
-    .map((n, i) => {
-      const { x, dy } = noteAt(i);
-      return noteSvg(n, x, mode, labels, dy);
-    })
+    .map((n, i) => noteSvg(n, X0 + i * NOTE_DX, mode, labels, 0))
     .join("");
   return `<svg viewBox="0 0 ${VIEW_W} ${viewH}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:860px">${out}</svg>`;
 };

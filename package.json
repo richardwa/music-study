@@ -12,6 +12,7 @@
   "devDependencies": {
     "@types/node": "^22.20.2",
     "prettier": "^3.9.6",
+    "sharp": "^0.35.4",
     "typescript": "7",
     "vite": "^7.3.6"
   },

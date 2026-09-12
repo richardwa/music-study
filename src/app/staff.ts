@@ -5,15 +5,16 @@ import { Title } from "./components";
 // --- staff geometry (px) ---
 const S = 12; // staff line spacing (one diatonic space)
 const VIEW_W = 840;
-const STAFF1_TOP = 40; // treble staff
+const STAFF1_TOP = 56; // treble staff
 const STAFF1_BOTTOM = STAFF1_TOP + 4 * S;
 const STAFF2_TOP = STAFF1_BOTTOM + 3 * S; // bass staff
 const STAFF2_BOTTOM = STAFF2_TOP + 4 * S;
-const X0 = 96;
+const BOTTOM_PAD = 9 * S; // room for ledger notes + labels below bass staff
+const X0 = 104;
 const NOTE_DX = 78;
 const NOTE_COUNT = 16;
 const NOTES_PER_SYSTEM = 8;
-const SYSTEM_GAP = 5 * S; // vertical gap between systems
+const SYSTEM_GAP = 12 * S; // vertical gap between systems
 const systemHeight = (mode: StaffMode) =>
   mode === "both" ? STAFF2_BOTTOM - STAFF1_TOP + SYSTEM_GAP : 9 * S;
 
@@ -74,7 +75,7 @@ const noteStaff = (n: number, mode: StaffMode): "treble" | "bass" =>
 
 // step relative to the staff's bottom line (even steps sit on lines)
 const stepOf = (n: number, staff: "treble" | "bass") =>
-  staff === "treble" ? n + 2 : n + 10; // treble bottom = E4, bass bottom = G2
+  staff === "treble" ? n - 2 : n + 10; // treble bottom = E4 (n=2), bass bottom = G2 (n=-10)
 
 const staffBottom = (staff: "treble" | "bass") =>
   staff === "treble" ? STAFF1_BOTTOM : STAFF2_BOTTOM;
@@ -153,7 +154,7 @@ const noteSvg = (
         ? STAFF2_TOP - S * 0.8
         : STAFF1_BOTTOM + 4.4 * S
       : STAFF2_BOTTOM + 4.4 * S;
-  const labelYAbs = labelY - STAFF1_TOP + dy;
+  const labelYAbs = labelY + dy;
   return [
     ledger,
     acc,
@@ -179,7 +180,7 @@ const staffSvg = (
   const sysH = systemHeight(mode);
   const sysCount = Math.max(1, Math.ceil(notes.length / NOTES_PER_SYSTEM));
   const sysInner = mode === "both" ? STAFF2_BOTTOM - STAFF1_TOP : 4 * S;
-  const viewH = (sysCount - 1) * sysH + sysInner + 6 * S;
+  const viewH = (sysCount - 1) * sysH + sysInner + BOTTOM_PAD;
   let out = "";
   for (let k = 0; k < sysCount; k++) {
     const dy = k * sysH;

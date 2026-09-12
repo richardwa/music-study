@@ -90,7 +90,7 @@ const staffLines = (top: number) =>
 const ACC_GLYPH: Record<number, string> = { "1": "\uE262", "-1": "\uE260" };
 const ACC_CENTER: Record<number, number> = { "1": 1, "-1": 132 }; // vertical center above baseline, units
 
-const noteSvg = (note: Note, x: number, mode: StaffMode) => {
+const noteSvg = (note: Note, x: number, mode: StaffMode, labels: boolean) => {
   const staff = noteStaff(note.n, mode);
   const step = stepOf(note.n, staff);
   const bottom = staffBottom(staff);
@@ -122,12 +122,16 @@ const noteSvg = (note: Note, x: number, mode: StaffMode) => {
     acc,
     `<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" transform="rotate(-20 ${x} ${y})" fill="#111"/>`,
     `<line x1="${stemX}" y1="${y}" x2="${stemX}" y2="${stemEnd}" stroke="#111" stroke-width="1.6"/>`,
-    `<text x="${x}" y="${labelY}" font-size="11" text-anchor="middle" fill="#666">${noteName(note)}</text>`,
+    ...(labels
+      ? [
+          `<text x="${x}" y="${labelY}" font-size="11" text-anchor="middle" fill="#666">${noteName(note)}</text>`,
+        ]
+      : []),
   ].join("");
 };
 const accSize = S * 3;
 
-const staffSvg = (notes: Note[], mode: StaffMode) => {
+const staffSvg = (notes: Note[], mode: StaffMode, labels: boolean) => {
   const bold = FONT;
   const single = mode !== "both";
   const top1 = single && mode === "bass" ? STAFF2_TOP : STAFF1_TOP;
@@ -146,7 +150,9 @@ const staffSvg = (notes: Note[], mode: StaffMode) => {
     out += `<text x="26" y="${STAFF2_TOP + S}" font-size="${S * 4.4}" ${bold}>&#xE062;</text>`;
   out += `<line x1="16" y1="${top1}" x2="16" y2="${bot}" stroke="#000" stroke-width="1.2"/>`;
   out += `<line x1="${VIEW_W - 16}" y1="${top1}" x2="${VIEW_W - 16}" y2="${bot}" stroke="#000" stroke-width="1.2"/>`;
-  out += notes.map((n, i) => noteSvg(n, X0 + i * NOTE_DX, mode)).join("");
+  out += notes
+    .map((n, i) => noteSvg(n, X0 + i * NOTE_DX, mode, labels))
+    .join("");
   return `<svg viewBox="0 0 ${VIEW_W} ${viewH}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:860px">${out}</svg>`;
 };
 
@@ -173,17 +179,25 @@ export const StaffPage = () => {
   const staffMode = signal("both");
   const root = signal("C");
   const scaleMode = signal("major");
+  const labels = signal("on");
   const nonce = signal(0);
 
-  const staff = h("div").watch([staffMode, root, scaleMode, nonce], (n) => {
-    const mode = staffMode.get() as StaffMode;
-    const notes = scaleNotes(
-      NAMES.indexOf(root.get()),
-      scaleMode.get() as ScaleMode,
-      rangeFor(mode),
-    );
-    n.el.innerHTML = staffSvg(randomNotes(notes, NOTE_COUNT), mode);
-  });
+  const staff = h("div").watch(
+    [staffMode, root, scaleMode, labels, nonce],
+    (n) => {
+      const mode = staffMode.get() as StaffMode;
+      const notes = scaleNotes(
+        NAMES.indexOf(root.get()),
+        scaleMode.get() as ScaleMode,
+        rangeFor(mode),
+      );
+      n.el.innerHTML = staffSvg(
+        randomNotes(notes, NOTE_COUNT),
+        mode,
+        labels.get() === "on",
+      );
+    },
+  );
 
   return vbox().inner(
     Title().css("font-weight", "bold").inner("Grand Staff"),
@@ -193,6 +207,7 @@ export const StaffPage = () => {
         Labeled("Staff", Select(staffMode, ["treble", "bass", "both"])),
         Labeled("Key", Select(root, [...NAMES])),
         Labeled("Scale", Select(scaleMode, ["major", "minor"])),
+        Labeled("Labels", Select(labels, ["on", "off"])),
         button()
           .on("click", () => nonce.set(nonce.get() + 1, true))
           .inner("New line"),

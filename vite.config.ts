@@ -2,7 +2,7 @@ import path from "path";
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  root: "src/client",
+  root: "src",
   server: {
     port: 5178,
     host: true,

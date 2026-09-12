@@ -57,6 +57,13 @@ const randomNotes = (notes: Note[], count: number) =>
     () => notes[Math.floor(Math.random() * notes.length)],
   );
 
+// midi note number for a Note
+const noteMidi = (note: Note) => {
+  const letter = ((note.n % 7) + 7) % 7;
+  const octave = 4 + Math.floor(note.n / 7);
+  return 12 * (octave + 1) + LETTER_SEMIS[letter] + note.acc;
+};
+
 // --- placement ---
 const noteStaff = (n: number, mode: StaffMode): "treble" | "bass" =>
   mode === "both" ? (n < 0 ? "bass" : "treble") : mode;
@@ -90,11 +97,24 @@ const staffLines = (top: number) =>
 const ACC_GLYPH: Record<number, string> = { "1": "\uE262", "-1": "\uE260" };
 const ACC_CENTER: Record<number, number> = { "1": 1, "-1": 132 }; // vertical center above baseline, units
 
+// head position of a note at slot x
+const notePos = (note: Note, x: number, mode: StaffMode) => {
+  const step = stepOf(note.n, noteStaff(note.n, mode));
+  return { y: staffBottom(noteStaff(note.n, mode)) - step * (S / 2) };
+};
+
+const cursorSvg = (note: Note, x: number, mode: StaffMode, bad: boolean) => {
+  const { y } = notePos(note, x, mode);
+  const w = S * 1.6;
+  const h = S * 1.1;
+  const color = bad ? "220,60,60" : "60,200,60";
+  return `<rect x="${(x - w / 2).toFixed(1)}" y="${(y - h / 2).toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="rgba(${color},0.35)" stroke="rgb(${color})" stroke-width="1.5"/>`;
+};
+
 const noteSvg = (note: Note, x: number, mode: StaffMode, labels: boolean) => {
   const staff = noteStaff(note.n, mode);
   const step = stepOf(note.n, staff);
-  const bottom = staffBottom(staff);
-  const y = bottom - step * (S / 2);
+  const y = staffBottom(staff) - step * (S / 2);
   const rx = S * 0.68;
   const ry = S * 0.48;
   const stemUp = step < 4; // below middle line
@@ -131,7 +151,13 @@ const noteSvg = (note: Note, x: number, mode: StaffMode, labels: boolean) => {
 };
 const accSize = S * 3;
 
-const staffSvg = (notes: Note[], mode: StaffMode, labels: boolean) => {
+const staffSvg = (
+  notes: Note[],
+  mode: StaffMode,
+  labels: boolean,
+  cursor: number,
+  bad: boolean,
+) => {
   const bold = FONT;
   const single = mode !== "both";
   const top1 = single && mode === "bass" ? STAFF2_TOP : STAFF1_TOP;
@@ -150,6 +176,8 @@ const staffSvg = (notes: Note[], mode: StaffMode, labels: boolean) => {
     out += `<text x="26" y="${STAFF2_TOP + S}" font-size="${S * 4.4}" ${bold}>&#xE062;</text>`;
   out += `<line x1="16" y1="${top1}" x2="16" y2="${bot}" stroke="#000" stroke-width="1.2"/>`;
   out += `<line x1="${VIEW_W - 16}" y1="${top1}" x2="${VIEW_W - 16}" y2="${bot}" stroke="#000" stroke-width="1.2"/>`;
+  if (cursor < notes.length)
+    out += cursorSvg(notes[cursor], X0 + cursor * NOTE_DX, mode, bad);
   out += notes
     .map((n, i) => noteSvg(n, X0 + i * NOTE_DX, mode, labels))
     .join("");
@@ -180,24 +208,82 @@ export const StaffPage = () => {
   const root = signal("C");
   const scaleMode = signal("major");
   const labels = signal("on");
-  const nonce = signal(0);
+  const midiStatus = signal("midi: …");
+  const notesSig = signal<Note[]>([]);
+  const cursor = signal(0);
+  const badFlash = signal(false);
 
-  const staff = h("div").watch(
-    [staffMode, root, scaleMode, labels, nonce],
-    (n) => {
-      const mode = staffMode.get() as StaffMode;
-      const notes = scaleNotes(
-        NAMES.indexOf(root.get()),
-        scaleMode.get() as ScaleMode,
-        rangeFor(mode),
-      );
-      n.el.innerHTML = staffSvg(
-        randomNotes(notes, NOTE_COUNT),
-        mode,
-        labels.get() === "on",
-      );
-    },
-  );
+  const genNotes = () => {
+    const notes = scaleNotes(
+      NAMES.indexOf(root.get()),
+      scaleMode.get() as ScaleMode,
+      rangeFor(staffMode.get() as StaffMode),
+    );
+    notesSig.set(randomNotes(notes, NOTE_COUNT));
+    cursor.set(0);
+  };
+
+  // regenerate on config change
+  h("div").watch([staffMode, root, scaleMode], () => genNotes());
+
+  const redraw = () => {
+    staffDiv.el.innerHTML = staffSvg(
+      notesSig.get(),
+      staffMode.get() as StaffMode,
+      labels.get() === "on",
+      cursor.get(),
+      badFlash.get(),
+    );
+  };
+  const staffDiv = h("div").watch([notesSig, cursor, labels, badFlash], redraw);
+
+  // --- midi ---
+  let flashTimer: ReturnType<typeof setTimeout> | undefined;
+  const onMidiNote = (midi: number) => {
+    const notes = notesSig.get();
+    const i = cursor.get();
+    if (i >= notes.length) return;
+    if (midi === noteMidi(notes[i])) {
+      if (i + 1 >= notes.length) {
+        genNotes(); // finished the line — new random line
+      } else {
+        cursor.set(i + 1);
+      }
+    } else {
+      badFlash.set(true);
+      clearTimeout(flashTimer);
+      flashTimer = setTimeout(() => badFlash.set(false), 350);
+    }
+  };
+
+  const setupMidi = async () => {
+    const nav = navigator as Navigator & {
+      requestMIDIAccess?: () => Promise<any>;
+    };
+    if (!nav.requestMIDIAccess) {
+      midiStatus.set("midi: unsupported");
+      return;
+    }
+    try {
+      const access = await nav.requestMIDIAccess();
+      const bind = () => {
+        let count = 0;
+        access.inputs.forEach((input: any) => {
+          count++;
+          input.onmidimessage = (e: any) => {
+            const [status, d1, d2] = e.data;
+            if ((status & 0xf0) === 0x90 && d2 > 0) onMidiNote(d1);
+          };
+        });
+        midiStatus.set(count ? `midi: ${count} device(s)` : "midi: no device");
+      };
+      bind();
+      access.onstatechange = bind;
+    } catch {
+      midiStatus.set("midi: access denied");
+    }
+  };
+  setupMidi();
 
   return vbox().inner(
     Title().css("font-weight", "bold").inner("Grand Staff"),
@@ -209,9 +295,13 @@ export const StaffPage = () => {
         Labeled("Scale", Select(scaleMode, ["major", "minor"])),
         Labeled("Labels", Select(labels, ["on", "off"])),
         button()
-          .on("click", () => nonce.set(nonce.get() + 1, true))
+          .on("click", () => genNotes())
           .inner("New line"),
+        h("span")
+          .css("color", "#888")
+          .css("font-size", "0.85rem")
+          .watch(midiStatus, (n) => (n.el.textContent = midiStatus.get())),
       ),
-    staff,
+    staffDiv,
   );
 };

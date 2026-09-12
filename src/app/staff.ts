@@ -320,6 +320,7 @@ export const StaffPage = () => {
     const notes = notesSig.get();
     const ctx = (audioCtx ??= new AudioContext());
     if (ctx.state === "suspended") await ctx.resume();
+    await sleep(250); // count-in: let audio ctx and device settle before first note
     for (let i = 0; i < notes.length; i++) {
       if (!playing.get()) break;
       const midi = noteMidi(notes[i]);

@@ -239,6 +239,7 @@ export const StaffPage = () => {
   staffDiv.watch([notesSig, cursor, labels, badFlash], redraw);
 
   // --- midi ---
+  let midiAccess: any;
   let flashTimer: ReturnType<typeof setTimeout> | undefined;
   const onMidiNote = (midi: number) => {
     const notes = notesSig.get();
@@ -267,6 +268,7 @@ export const StaffPage = () => {
     }
     try {
       const access = await nav.requestMIDIAccess();
+      midiAccess = access;
       const bind = () => {
         let count = 0;
         access.inputs.forEach((input: any) => {
@@ -286,6 +288,59 @@ export const StaffPage = () => {
   };
   setupMidi();
 
+  // --- playback: midi out + local web audio ---
+  const midiFreq = (midi: number) => 440 * Math.pow(2, (midi - 69) / 12);
+  let audioCtx: AudioContext | undefined;
+  const playTone = (midi: number, t0: number, dur: number) => {
+    audioCtx ??= new AudioContext();
+    const ctx = audioCtx;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "triangle";
+    osc.frequency.value = midiFreq(midi);
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(0.25, t0 + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.05);
+  };
+
+  const playing = signal(false);
+  const NOTE_MS = 450;
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+  const sendMidi = (bytes: number[], timestampMs?: number) => {
+    midiAccess?.outputs?.forEach((out: any) => out.send(bytes, timestampMs));
+  };
+
+  const playLine = async () => {
+    if (playing.get()) return;
+    playing.set(true);
+    const notes = notesSig.get();
+    const ctx = (audioCtx ??= new AudioContext());
+    if (ctx.state === "suspended") await ctx.resume();
+    for (let i = 0; i < notes.length; i++) {
+      if (!playing.get()) break;
+      const midi = noteMidi(notes[i]);
+      cursor.set(i);
+      const t = ctx.currentTime;
+      playTone(midi, t, NOTE_MS / 1000);
+      sendMidi([0x90, midi, 90]);
+      sendMidi([0x80, midi, 0], (t + NOTE_MS / 1000) * 1000); // off at end of note
+      await sleep(NOTE_MS);
+    }
+    playing.set(false);
+    cursor.set(0);
+  };
+
+  const playBtn = button();
+  playBtn
+    .watch(playing, () => {
+      playBtn.el.textContent = playing.get() ? "Stop" : "Play";
+    })
+    .on("click", () => (playing.get() ? playing.set(false) : playLine()));
+
   return vbox().inner(
     Title().css("font-weight", "bold").inner("Grand Staff"),
     hbox()
@@ -298,6 +353,7 @@ export const StaffPage = () => {
         button()
           .on("click", () => genNotes())
           .inner("New line"),
+        playBtn,
         h("span")
           .css("color", "#888")
           .css("font-size", "0.85rem")

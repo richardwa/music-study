@@ -70,25 +70,13 @@ const noteSvg = (n: number, x: number) => {
   ].join("");
 };
 
-// curly brace path spanning y1..y2 at given x, bulging left
-const bracePath = (x: number, y1: number, y2: number) => {
-  const mid = (y1 + y2) / 2;
-  const w = (y2 - y1) * 0.06; // bulge depth
-  return `
-    M ${x} ${y1}
-    C ${x - w} ${y1 + (mid - y1) * 0.55}, ${x - w} ${mid - (mid - y1) * 0.35}, ${x} ${mid}
-    C ${x - w} ${mid + (mid - y1) * 0.35}, ${x - w} ${y2 - (mid - y1) * 0.55}, ${x} ${y2}
-    C ${x + w * 0.35} ${y2 - (mid - y1) * 0.35}, ${x + w * 0.35} ${mid + (mid - y1) * 0.4}, ${x + w * 0.5} ${mid}
-    C ${x + w * 0.35} ${mid - (mid - y1) * 0.4}, ${x + w * 0.35} ${y1 + (mid - y1) * 0.35}, ${x} ${y1}
-    Z`
-    .replace(/\s+/g, " ")
-    .trim();
-};
-
 const staffSvg = (notes: number[]) => {
-  const brace = `<path d="${bracePath(14, STAFF1_TOP, STAFF2_BOTTOM)}" fill="#000"/>`;
-  const trebleClef = `<text x="26" y="${STAFF1_BOTTOM - S * 0.1}" font-size="${S * 3.4}" fill="#000">&#x1D11E;</text>`;
-  const bassClef = `<text x="26" y="${STAFF2_TOP + 3.6 * S}" font-size="${S * 4}" fill="#000">&#x1D122;</text>`;
+  const bold = 'font-family="Bravura" fill="#000"';
+  // brace spans the full grand staff; SMuFL brace is centered on its origin
+  const braceH = STAFF2_BOTTOM - STAFF1_TOP;
+  const brace = `<text transform="translate(18 ${(STAFF1_TOP + STAFF2_BOTTOM) / 2}) scale(1 ${(braceH / (S * 4)).toFixed(3)})" font-size="${S * 4}" ${bold}>&#xE000;</text>`;
+  const trebleClef = `<text x="26" y="${STAFF1_BOTTOM - S}" font-size="${S * 4}" ${bold}>&#xE050;</text>`;
+  const bassClef = `<text x="26" y="${STAFF2_TOP + S}" font-size="${S * 4}" ${bold}>&#xE062;</text>`;
   const joinTop = `<line x1="16" y1="${STAFF1_TOP}" x2="16" y2="${STAFF2_BOTTOM}" stroke="#000" stroke-width="1.2"/>`;
   const joinBottom = `<line x1="${VIEW_W - 16}" y1="${STAFF1_TOP}" x2="${VIEW_W - 16}" y2="${STAFF2_BOTTOM}" stroke="#000" stroke-width="1.2"/>`;
   const notesSvg = notes.map((n, i) => noteSvg(n, X0 + i * NOTE_DX)).join("");

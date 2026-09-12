@@ -88,7 +88,7 @@ const bracePath = (x: number, y1: number, y2: number) => {
 const staffSvg = (notes: number[]) => {
   const brace = `<path d="${bracePath(14, STAFF1_TOP, STAFF2_BOTTOM)}" fill="#000"/>`;
   const trebleClef = `<text x="26" y="${STAFF1_BOTTOM - S * 0.1}" font-size="${S * 3.4}" fill="#000">&#x1D11E;</text>`;
-  const bassClef = `<text x="26" y="${STAFF2_TOP + 3 * S}" font-size="${S * 3.4}" fill="#000">&#x1D122;</text>`;
+  const bassClef = `<text x="26" y="${STAFF2_TOP + 3.4 * S}" font-size="${S * 4.6}" fill="#000">&#x1D122;</text>`;
   const joinTop = `<line x1="16" y1="${STAFF1_TOP}" x2="16" y2="${STAFF2_BOTTOM}" stroke="#000" stroke-width="1.2"/>`;
   const joinBottom = `<line x1="${VIEW_W - 16}" y1="${STAFF1_TOP}" x2="${VIEW_W - 16}" y2="${STAFF2_BOTTOM}" stroke="#000" stroke-width="1.2"/>`;
   const notesSvg = notes.map((n, i) => noteSvg(n, X0 + i * NOTE_DX)).join("");

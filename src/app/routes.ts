@@ -1,5 +1,5 @@
 import { HashRouter, div } from "solid-vanilla";
-import { Home } from "./home";
+import { StaffPage } from "./staff";
 
 const root = div()
   .css("height", "100%")
@@ -8,6 +8,6 @@ const root = div()
 
 const router = new HashRouter(root);
 
-router.addRoute("/", () => Home());
+router.addRoute("/", () => StaffPage());
 
 export { router };

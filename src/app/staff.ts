@@ -257,11 +257,21 @@ const Labeled = (label: string, control: RNode) =>
       control,
     );
 
-const Select = (val: Signal<string>, options: string[]) => {
+const Select = (
+  val: Signal<string>,
+  options: string[],
+  disabled?: Signal<boolean>,
+) => {
   const node = h("select")
     .on("change", (e: Event) => val.set((e.target as HTMLSelectElement).value))
     .inner(...options.map((o) => h("option").inner(o))) as RNode;
   (node.el as unknown as HTMLSelectElement).value = val.get();
+  if (disabled)
+    node.watch(
+      disabled,
+      (n) => ((n.el as HTMLSelectElement).disabled = disabled.get()),
+      false,
+    );
   return node;
 };
 
@@ -353,6 +363,7 @@ export const StaffPage = () => {
         // "i >= notes.length" guard ignores further presses until Start
         cursor.set(notes.length);
         endSession();
+        running.set(false);
       }
     } else {
       incorrect++;
@@ -398,9 +409,19 @@ export const StaffPage = () => {
   );
 
   // --- practice session ---
-  const startBtn = button()
-    .on("click", () => genNotes())
-    .inner("Start");
+  const running = signal(false);
+  const startBtn = button().on("click", () => {
+    if (running.get()) {
+      running.set(false);
+    } else {
+      running.set(true);
+      genNotes();
+    }
+  });
+  startBtn.watch(running, (n) => {
+    n.el.textContent = running.get() ? "Cancel" : "Start";
+    (n.el as HTMLButtonElement).disabled = false;
+  });
 
   return vbox().inner(
     h("div")
@@ -418,19 +439,31 @@ export const StaffPage = () => {
     hbox()
       .css("gap", "1.25rem")
       .css("flex-wrap", "wrap")
+      .css("justify-content", "center")
       .css("align-items", "center")
       .inner(
-        Labeled("Staff", Select(staffMode, ["treble", "bass", "both"])),
-        Labeled("Key", Select(root, [...NAMES])),
-        Labeled("Scale", Select(scaleMode, ["major", "minor"])),
+        Labeled(
+          "Staff",
+          Select(staffMode, ["treble", "bass", "both"], running),
+        ),
+        Labeled("Key", Select(root, [...NAMES], running)),
+        Labeled("Scale", Select(scaleMode, ["major", "minor"], running)),
         Labeled("Labels", Select(labels, ["on", "off"])),
+        vbox()
+          .css("gap", "0.25rem")
+          .inner(
+            h("label")
+              .css("color", "transparent")
+              .css("font-size", "0.8rem")
+              .inner("."),
+            startBtn,
+          ),
       ),
     hbox()
-      .css("justify-content", "space-between")
+      .css("justify-content", "center")
       .css("align-items", "center")
       .css("padding", "0.25rem 0")
       .inner(
-        startBtn,
         h("div").inner(
           h("span")
             .css("font-weight", "bold")

@@ -292,12 +292,25 @@ export const StaffPage = () => {
   let attempts = 0;
   let correct = 0;
   let incorrect = 0;
+  let startedAt = 0;
+  let elapsedMs = 0;
+  let tickTimer: ReturnType<typeof setInterval> | undefined;
+
+  const tallyText = (prefix = "") => {
+    const pct = Math.round((correct / NOTE_COUNT) * 100);
+    const secs = Math.floor(elapsedMs / 1000);
+    const mm = Math.floor(secs / 60);
+    const ss = `${secs % 60}`.padStart(2, "0");
+    return `${prefix}${correct}/${NOTE_COUNT} correct (${pct}%) \u2014 ${mm}:${ss}`;
+  };
 
   const genNotes = () => {
     attempts = 0;
     correct = 0;
     incorrect = 0;
-    scoreSig.set(`0/${NOTE_COUNT} correct (0%)`);
+    startedAt = Date.now();
+    elapsedMs = 0;
+    scoreSig.set(tallyText());
     wrongSig.set("0 wrong presses");
     const notes = scaleNotes(
       NAMES.indexOf(root.get()),
@@ -329,24 +342,22 @@ export const StaffPage = () => {
   };
   staffDiv.watch([notesSig, cursor, labels, badFlash, keySigSig], redraw);
 
-  // --- midi ---
-  let midiAccess: any;
-  let flashTimer: ReturnType<typeof setTimeout> | undefined;
-
-  const tallyText = (prefix = "") => {
-    const pct = Math.round((correct / NOTE_COUNT) * 100);
-    return `${prefix}${correct}/${NOTE_COUNT} correct (${pct}%)`;
-  };
-
   const updateScore = () => {
     scoreSig.set(tallyText());
     wrongSig.set(`${incorrect} wrong presses`);
   };
 
   // session over: show the final tally and stop accepting presses
-  const endSession = () =>
+  const endSession = () => {
+    clearInterval(tickTimer);
+    elapsedMs = Date.now() - startedAt;
     scoreSig.set(tallyText("\u2713 session complete \u2014 "));
-  wrongSig.set(`${incorrect} wrong presses`);
+    wrongSig.set(`${incorrect} wrong presses`);
+  };
+
+  // --- midi ---
+  let midiAccess: any;
+  let flashTimer: ReturnType<typeof setTimeout> | undefined;
 
   const onMidiNote = (midi: number) => {
     const notes = notesSig.get();
@@ -412,10 +423,15 @@ export const StaffPage = () => {
   const running = signal(false);
   const startBtn = button().on("click", () => {
     if (running.get()) {
+      clearInterval(tickTimer);
       running.set(false);
     } else {
       running.set(true);
       genNotes();
+      tickTimer = setInterval(() => {
+        elapsedMs = Date.now() - startedAt;
+        scoreSig.set(tallyText());
+      }, 250);
     }
   });
   startBtn.watch(running, (n) => {

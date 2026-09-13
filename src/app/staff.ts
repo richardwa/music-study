@@ -213,6 +213,7 @@ const staffSvg = (
   cursor: number,
   bad: boolean,
   keySig: Note[] = [],
+  showCursor = true,
 ) => {
   const bold = FONT;
   const top1 = mode === "bass" ? STAFF2_TOP : STAFF1_TOP;
@@ -240,7 +241,7 @@ const staffSvg = (
     const x = X0 + k * 4 * NOTE_DX - NOTE_DX / 2;
     out += `<line x1="${x}" y1="${top1}" x2="${x}" y2="${bot}" stroke="#000" stroke-width="1.2"/>`;
   }
-  if (cursor < notes.length)
+  if (showCursor && cursor < notes.length)
     out += cursorSvg(notes[cursor], X0 + cursor * NOTE_DX, mode, bad, 0);
   out += notes
     .map((n, i) => noteSvg(n, X0 + i * NOTE_DX, mode, labels, 0))
@@ -287,6 +288,7 @@ export const StaffPage = () => {
   const badFlash = signal(false);
   const scoreSig = signal("");
   const wrongSig = signal("");
+  const running = signal(false); // practice session started?
 
   // per-line key press tracking
   let attempts = 0;
@@ -304,14 +306,16 @@ export const StaffPage = () => {
     return `${prefix}${correct}/${NOTE_COUNT} correct (${pct}%) \u2014 ${mm}:${ss}`;
   };
 
-  const genNotes = () => {
+  // regenerate the note line (also used to reset when config changes while
+  // stopped — nothing is scored or highlighted until Start is pressed)
+  const resetLine = () => {
     attempts = 0;
     correct = 0;
     incorrect = 0;
-    startedAt = Date.now();
+    startedAt = 0;
     elapsedMs = 0;
-    scoreSig.set(tallyText());
-    wrongSig.set("0 wrong presses");
+    scoreSig.set("");
+    wrongSig.set("");
     const notes = scaleNotes(
       NAMES.indexOf(root.get()),
       scaleMode.get() as ScaleMode,
@@ -326,7 +330,7 @@ export const StaffPage = () => {
     keySigSig.set(
       keySigNotes(NAMES.indexOf(root.get()), scaleMode.get() as ScaleMode),
     );
-    genNotes();
+    resetLine();
   });
 
   const staffDiv = h("div").css("padding", "0 1.5rem");
@@ -338,9 +342,13 @@ export const StaffPage = () => {
       cursor.get(),
       badFlash.get(),
       keySigSig.get(),
+      running.get(),
     );
   };
-  staffDiv.watch([notesSig, cursor, labels, badFlash, keySigSig], redraw);
+  staffDiv.watch(
+    [notesSig, cursor, labels, badFlash, keySigSig, running],
+    redraw,
+  );
 
   const updateScore = () => {
     scoreSig.set(tallyText());
@@ -360,6 +368,7 @@ export const StaffPage = () => {
   let flashTimer: ReturnType<typeof setTimeout> | undefined;
 
   const onMidiNote = (midi: number) => {
+    if (!running.get()) return; // not started — press Start first
     const notes = notesSig.get();
     const i = cursor.get();
     if (i >= notes.length) return; // session done — press Start for a new set
@@ -420,14 +429,16 @@ export const StaffPage = () => {
   );
 
   // --- practice session ---
-  const running = signal(false);
   const startBtn = button().on("click", () => {
     if (running.get()) {
       clearInterval(tickTimer);
       running.set(false);
     } else {
       running.set(true);
-      genNotes();
+      resetLine();
+      startedAt = Date.now();
+      scoreSig.set(tallyText());
+      wrongSig.set("0 wrong presses");
       tickTimer = setInterval(() => {
         elapsedMs = Date.now() - startedAt;
         scoreSig.set(tallyText());

@@ -11,8 +11,8 @@ const STAFF2_TOP = STAFF1_BOTTOM + 3 * S; // bass staff
 const STAFF2_BOTTOM = STAFF2_TOP + 4 * S;
 const BOTTOM_PAD = 9 * S; // room for ledger notes + labels below bass staff
 const X0 = 104;
-const NOTE_DX = 78;
-const NOTE_COUNT = 8;
+const NOTE_DX = 46;
+const NOTE_COUNT = 16;
 
 // --- config ---
 type StaffMode = "treble" | "bass" | "both";
@@ -190,6 +190,11 @@ const staffSvg = (
     out += `<text x="26" y="${STAFF2_TOP + S}" font-size="${S * 4.4}" ${bold}>&#xE062;</text>`;
   out += `<line x1="16" y1="${top1}" x2="16" y2="${bot}" stroke="#000" stroke-width="1.2"/>`;
   out += `<line x1="${VIEW_W - 16}" y1="${top1}" x2="${VIEW_W - 16}" y2="${bot}" stroke="#000" stroke-width="1.2"/>`;
+  // bar lines between groups of 4 notes
+  for (let k = 1; k * 4 < NOTE_COUNT; k++) {
+    const x = X0 + k * 4 * NOTE_DX - NOTE_DX / 2;
+    out += `<line x1="${x}" y1="${top1}" x2="${x}" y2="${bot}" stroke="#000" stroke-width="1.2"/>`;
+  }
   if (cursor < notes.length)
     out += cursorSvg(notes[cursor], X0 + cursor * NOTE_DX, mode, bad, 0);
   out += notes
@@ -218,16 +223,26 @@ const Select = (val: Signal<string>, options: string[]) => {
 };
 
 export const StaffPage = () => {
-  const staffMode = signal("both");
-  const root = signal("C");
-  const scaleMode = signal("major");
-  const labels = signal("on");
+  const staffMode = signal("both").persistAs("music-study:staffMode");
+  const root = signal("C").persistAs("music-study:key");
+  const scaleMode = signal("major").persistAs("music-study:scaleMode");
+  const labels = signal("on").persistAs("music-study:labels");
   const midiStatus = signal("midi: …");
   const notesSig = signal<Note[]>([]);
   const cursor = signal(0);
   const badFlash = signal(false);
+  const scoreSig = signal("");
+
+  // per-line key press tracking
+  let attempts = 0;
+  let correct = 0;
+  let incorrect = 0;
 
   const genNotes = () => {
+    attempts = 0;
+    correct = 0;
+    incorrect = 0;
+    scoreSig.set("0/0 correct (100%), 0 wrong");
     const notes = scaleNotes(
       NAMES.indexOf(root.get()),
       scaleMode.get() as ScaleMode,
@@ -255,17 +270,26 @@ export const StaffPage = () => {
   // --- midi ---
   let midiAccess: any;
   let flashTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const updateScore = () => {
+    const pct = attempts ? Math.round((correct / attempts) * 100) : 100;
+    scoreSig.set(
+      `${correct}/${attempts} correct (${pct}%), ${incorrect} wrong`,
+    );
+  };
+
   const onMidiNote = (midi: number) => {
     const notes = notesSig.get();
     const i = cursor.get();
-    if (i >= notes.length) return;
+    if (i >= notes.length) return; // session done — press Start for a new set
+    attempts++;
+    updateScore();
     if (midi === noteMidi(notes[i])) {
-      if (i + 1 >= notes.length) {
-        genNotes(); // finished the line — new random line
-      } else {
-        cursor.set(i + 1);
-      }
+      correct++;
+      // reaching the last note ends the session
+      if (i + 1 < notes.length) cursor.set(i + 1);
     } else {
+      incorrect++;
       badFlash.set(true);
       clearTimeout(flashTimer);
       flashTimer = setTimeout(() => badFlash.set(false), 350);
@@ -302,58 +326,10 @@ export const StaffPage = () => {
   };
   setupMidi();
 
-  // --- playback: midi out + local web audio ---
-  const midiFreq = (midi: number) => 440 * Math.pow(2, (midi - 69) / 12);
-  let audioCtx: AudioContext | undefined;
-  const playTone = (midi: number, t0: number, dur: number) => {
-    audioCtx ??= new AudioContext();
-    const ctx = audioCtx;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "triangle";
-    osc.frequency.value = midiFreq(midi);
-    gain.gain.setValueAtTime(0.0001, t0);
-    gain.gain.exponentialRampToValueAtTime(0.25, t0 + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    osc.connect(gain).connect(ctx.destination);
-    osc.start(t0);
-    osc.stop(t0 + dur + 0.05);
-  };
-
-  const playing = signal(false);
-  const NOTE_MS = 450;
-  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-  const sendMidi = (bytes: number[], timestampMs?: number) => {
-    midiAccess?.outputs?.forEach((out: any) => out.send(bytes, timestampMs));
-  };
-
-  const playLine = async () => {
-    if (playing.get()) return;
-    playing.set(true);
-    const notes = notesSig.get();
-    const ctx = (audioCtx ??= new AudioContext());
-    if (ctx.state === "suspended") await ctx.resume();
-    for (let i = 0; i < notes.length; i++) {
-      if (!playing.get()) break;
-      const midi = noteMidi(notes[i]);
-      cursor.set(i);
-      const t = ctx.currentTime;
-      playTone(midi, t, NOTE_MS / 1000);
-      sendMidi([0x90, midi, 90]);
-      sendMidi([0x80, midi, 0], (t + NOTE_MS / 1000) * 1000); // off at end of note
-      await sleep(NOTE_MS);
-    }
-    playing.set(false);
-    cursor.set(0);
-  };
-
-  const playBtn = button();
-  playBtn
-    .watch(playing, () => {
-      playBtn.el.textContent = playing.get() ? "Stop" : "Play";
-    })
-    .on("click", () => (playing.get() ? playing.set(false) : playLine()));
+  // --- practice session ---
+  const startBtn = button()
+    .on("click", () => genNotes())
+    .inner("Start");
 
   return vbox().inner(
     Title().css("font-weight", "bold").inner("Grand Staff"),
@@ -367,12 +343,17 @@ export const StaffPage = () => {
         button()
           .on("click", () => genNotes())
           .inner("New line"),
-        playBtn,
+        startBtn,
         h("span")
           .css("color", "#888")
           .css("font-size", "0.85rem")
           .watch(midiStatus, (n) => (n.el.textContent = midiStatus.get())),
       ),
+    h("div")
+      .css("font-weight", "bold")
+      .css("color", "#7ddb7d")
+      .css("padding", "0.25rem 0")
+      .watch(scoreSig, (n) => (n.el.textContent = scoreSig.get())),
     staffDiv,
   );
 };

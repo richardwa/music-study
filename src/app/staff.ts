@@ -243,7 +243,7 @@ export const StaffPage = () => {
     attempts = 0;
     correct = 0;
     incorrect = 0;
-    scoreSig.set("0/0 correct (100%)");
+    scoreSig.set(`0/${NOTE_COUNT} correct (0%)`);
     wrongSig.set("0 wrong presses");
     const notes = scaleNotes(
       NAMES.indexOf(root.get()),
@@ -274,8 +274,8 @@ export const StaffPage = () => {
   let flashTimer: ReturnType<typeof setTimeout> | undefined;
 
   const tallyText = (prefix = "") => {
-    const pct = attempts ? Math.round((correct / attempts) * 100) : 100;
-    return `${prefix}${correct}/${attempts} correct (${pct}%)`;
+    const pct = Math.round((correct / NOTE_COUNT) * 100);
+    return `${prefix}${correct}/${NOTE_COUNT} correct (${pct}%)`;
   };
 
   const updateScore = () => {

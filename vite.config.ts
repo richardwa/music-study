@@ -4,7 +4,7 @@ import { defineConfig } from "vite";
 export default defineConfig({
   root: "src",
   server: {
-    port: 5178,
+    port: 5173,
     host: true,
     allowedHosts: true,
     strictPort: true,

@@ -53,11 +53,19 @@ const scaleNotes = (
   return out.sort((a, b) => a.n - b.n);
 };
 
-const randomNotes = (notes: Note[], count: number) =>
-  Array.from(
-    { length: count },
-    () => notes[Math.floor(Math.random() * notes.length)],
-  );
+// random notes, never repeating the same pitch back to back
+const randomNotes = (notes: Note[], count: number): Note[] => {
+  const out: Note[] = [];
+  let prev: Note | undefined;
+  for (let k = 0; k < count; k++) {
+    // exclude the previous note so a pitch never repeats in a row
+    const pool = notes.length > 1 ? notes.filter((n) => n !== prev) : notes;
+    const next = pool[Math.floor(Math.random() * pool.length)];
+    out.push(next);
+    prev = next;
+  }
+  return out;
+};
 
 // midi note number for a Note
 const noteMidi = (note: Note) => {
@@ -307,8 +315,8 @@ export const StaffPage = () => {
     return `${prefix}${correct}/${NOTE_COUNT} correct (${pct}%) \u2014 ${mm}:${ss}`;
   };
 
-  // regenerate the note line (also used to reset when config changes while
-  // stopped — nothing is scored or highlighted until Start is pressed)
+  // reset score/state and clear the line — notes are only dealt when Start
+  // is pressed (also used when config changes while stopped)
   const resetLine = () => {
     correct = 0;
     incorrect = 0;
@@ -317,6 +325,12 @@ export const StaffPage = () => {
     elapsedMs = 0;
     scoreSig.set("");
     wrongSig.set("");
+    notesSig.set([]);
+    cursor.set(0);
+  };
+
+  // deal a fresh line of notes from the current config
+  const dealLine = () => {
     const notes = scaleNotes(
       NAMES.indexOf(root.get()),
       scaleMode.get() as ScaleMode,
@@ -438,6 +452,7 @@ export const StaffPage = () => {
     } else {
       running.set(true);
       resetLine();
+      dealLine();
       startedAt = Date.now();
       scoreSig.set(tallyText());
       wrongSig.set("0 wrong presses");

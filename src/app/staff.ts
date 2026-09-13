@@ -1,6 +1,5 @@
 import { button, h, hbox, signal, vbox } from "solid-vanilla";
 import type { RNode, Signal } from "solid-vanilla";
-import { Title } from "./components";
 
 // --- staff geometry (px) ---
 const S = 12; // staff line spacing (one diatonic space)
@@ -200,7 +199,7 @@ const staffSvg = (
   out += notes
     .map((n, i) => noteSvg(n, X0 + i * NOTE_DX, mode, labels, 0))
     .join("");
-  return `<svg viewBox="0 0 ${VIEW_W} ${viewH}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:860px">${out}</svg>`;
+  return `<svg viewBox="0 0 ${VIEW_W} ${viewH}" xmlns="http://www.w3.org/2000/svg" style="width:100%">${out}</svg>`;
 };
 
 // --- ui ---
@@ -349,35 +348,45 @@ export const StaffPage = () => {
     .inner("Start");
 
   return vbox().inner(
-    Title().css("font-weight", "bold").inner("Grand Staff"),
-    hbox()
-      .css("gap", "1.5rem")
+    h("div")
+      .css("position", "absolute")
+      .css("top", "0.5rem")
+      .css("right", "0.5rem")
+      .css("display", "flex")
+      .css("justify-content", "flex-end")
       .inner(
-        Labeled("Staff", Select(staffMode, ["treble", "bass", "both"])),
-        Labeled("Key", Select(root, [...NAMES])),
-        Labeled("Scale", Select(scaleMode, ["major", "minor"])),
-        Labeled("Labels", Select(labels, ["on", "off"])),
-        button()
-          .on("click", () => genNotes())
-          .inner("New line"),
-        startBtn,
         h("span")
           .css("color", "#888")
           .css("font-size", "0.85rem")
           .watch(midiStatus, (n) => (n.el.textContent = midiStatus.get())),
       ),
-    h("div")
+    hbox()
+      .css("gap", "1.25rem")
+      .css("flex-wrap", "wrap")
+      .css("align-items", "center")
+      .inner(
+        Labeled("Staff", Select(staffMode, ["treble", "bass", "both"])),
+        Labeled("Key", Select(root, [...NAMES])),
+        Labeled("Scale", Select(scaleMode, ["major", "minor"])),
+        Labeled("Labels", Select(labels, ["on", "off"])),
+      ),
+    hbox()
+      .css("justify-content", "space-between")
+      .css("align-items", "center")
       .css("padding", "0.25rem 0")
       .inner(
-        h("span")
-          .css("font-weight", "bold")
-          .css("color", "#15803d")
-          .watch(scoreSig, (n) => (n.el.textContent = scoreSig.get())),
-        h("span")
-          .css("font-weight", "bold")
-          .css("color", "#dc2626")
-          .css("margin-left", "0.75rem")
-          .watch(wrongSig, (n) => (n.el.textContent = wrongSig.get())),
+        startBtn,
+        h("div").inner(
+          h("span")
+            .css("font-weight", "bold")
+            .css("color", "#15803d")
+            .watch(scoreSig, (n) => (n.el.textContent = scoreSig.get())),
+          h("span")
+            .css("font-weight", "bold")
+            .css("color", "#dc2626")
+            .css("margin-left", "0.75rem")
+            .watch(wrongSig, (n) => (n.el.textContent = wrongSig.get())),
+        ),
       ),
     staffDiv,
   );

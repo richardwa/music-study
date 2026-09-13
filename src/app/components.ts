@@ -9,7 +9,10 @@ export const Panel = () =>
     .css("background-color", "#424242");
 
 export const Button = () =>
-  h("button").attr("type", "button").css("padding", "0.25rem");
+  h("button")
+    .attr("type", "button")
+    .css("padding", "0.5rem 0.9rem")
+    .css("font-size", "1rem");
 
 export const NavLink = (href: string) =>
   h("a").attr("href", href).attr("target", "_blank");

@@ -17,6 +17,7 @@
     "vite": "^7.3.6"
   },
   "dependencies": {
+    "@picocss/pico": "^2.1.1",
     "fontkit": "^2.0.4",
     "solid-vanilla": "github:richardwa/solid-vanilla#d758c02"
   }

@@ -27,7 +27,7 @@ const MODE_SEMIS: Record<ScaleMode, number[]> = {
 
 // diatonic window per staff layout
 const rangeFor = (mode: StaffMode): [number, number] =>
-  mode === "treble" ? [0, 7] : mode === "bass" ? [-14, -7] : [-7, 7];
+  mode === "treble" ? [0, 12] : mode === "bass" ? [-12, 0] : [-12, 12];
 
 // all scale notes in the window, sharps/flats included
 const scaleNotes = (
@@ -36,7 +36,7 @@ const scaleNotes = (
   range: [number, number],
 ): Note[] => {
   const out: Note[] = [];
-  for (let oct = -2; oct <= 2; oct++) {
+  for (let oct = -3; oct <= 3; oct++) {
     MODE_SEMIS[mode].forEach((semi, i) => {
       const degree = root + i;
       const letter = degree % 7;
@@ -227,7 +227,7 @@ const staffSvg = (
   const top1 = mode === "bass" ? STAFF2_TOP : STAFF1_TOP;
   const bot = mode === "both" ? STAFF2_BOTTOM : staffBottom(mode);
   const viewH = bot + BOTTOM_PAD;
-  let out = staffLines(STAFF1_TOP);
+  let out = staffLines(top1);
   if (mode === "both") {
     out += staffLines(STAFF2_TOP);
     // brace spans the grand staff; SMuFL brace sits on its baseline at the

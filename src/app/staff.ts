@@ -290,10 +290,11 @@ export const StaffPage = () => {
   const wrongSig = signal("");
   const running = signal(false); // practice session started?
 
-  // per-line key press tracking
-  let attempts = 0;
+  // per-line key press tracking (a note only counts as correct when played
+  // right on the first try — retries keep it out of the tally)
   let correct = 0;
   let incorrect = 0;
+  let missed = false; // current note has had a wrong press
   let startedAt = 0;
   let elapsedMs = 0;
   let tickTimer: ReturnType<typeof setInterval> | undefined;
@@ -309,9 +310,9 @@ export const StaffPage = () => {
   // regenerate the note line (also used to reset when config changes while
   // stopped — nothing is scored or highlighted until Start is pressed)
   const resetLine = () => {
-    attempts = 0;
     correct = 0;
     incorrect = 0;
+    missed = false;
     startedAt = 0;
     elapsedMs = 0;
     scoreSig.set("");
@@ -372,9 +373,9 @@ export const StaffPage = () => {
     const notes = notesSig.get();
     const i = cursor.get();
     if (i >= notes.length) return; // session done — press Start for a new set
-    attempts++;
     if (midi === noteMidi(notes[i])) {
-      correct++;
+      if (!missed) correct++; // first-try hit
+      missed = false;
       if (i + 1 < notes.length) {
         updateScore();
         cursor.set(i + 1);
@@ -387,6 +388,7 @@ export const StaffPage = () => {
       }
     } else {
       incorrect++;
+      missed = true;
       updateScore();
       badFlash.set(true);
       clearTimeout(flashTimer);

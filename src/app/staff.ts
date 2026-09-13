@@ -232,6 +232,7 @@ export const StaffPage = () => {
   const cursor = signal(0);
   const badFlash = signal(false);
   const scoreSig = signal("");
+  const wrongSig = signal("");
 
   // per-line key press tracking
   let attempts = 0;
@@ -242,7 +243,8 @@ export const StaffPage = () => {
     attempts = 0;
     correct = 0;
     incorrect = 0;
-    scoreSig.set("0/0 correct (100%), 0 wrong");
+    scoreSig.set("0/0 correct (100%)");
+    wrongSig.set("0 wrong presses");
     const notes = scaleNotes(
       NAMES.indexOf(root.get()),
       scaleMode.get() as ScaleMode,
@@ -271,25 +273,40 @@ export const StaffPage = () => {
   let midiAccess: any;
   let flashTimer: ReturnType<typeof setTimeout> | undefined;
 
-  const updateScore = () => {
+  const tallyText = (prefix = "") => {
     const pct = attempts ? Math.round((correct / attempts) * 100) : 100;
-    scoreSig.set(
-      `${correct}/${attempts} correct (${pct}%), ${incorrect} wrong`,
-    );
+    return `${prefix}${correct}/${attempts} correct (${pct}%)`;
   };
+
+  const updateScore = () => {
+    scoreSig.set(tallyText());
+    wrongSig.set(`${incorrect} wrong presses`);
+  };
+
+  // session over: show the final tally and stop accepting presses
+  const endSession = () =>
+    scoreSig.set(tallyText("\u2713 session complete \u2014 "));
+  wrongSig.set(`${incorrect} wrong presses`);
 
   const onMidiNote = (midi: number) => {
     const notes = notesSig.get();
     const i = cursor.get();
     if (i >= notes.length) return; // session done — press Start for a new set
     attempts++;
-    updateScore();
     if (midi === noteMidi(notes[i])) {
       correct++;
-      // reaching the last note ends the session
-      if (i + 1 < notes.length) cursor.set(i + 1);
+      if (i + 1 < notes.length) {
+        updateScore();
+        cursor.set(i + 1);
+      } else {
+        // last note reached: move the cursor past the end so the
+        // "i >= notes.length" guard ignores further presses until Start
+        cursor.set(notes.length);
+        endSession();
+      }
     } else {
       incorrect++;
+      updateScore();
       badFlash.set(true);
       clearTimeout(flashTimer);
       flashTimer = setTimeout(() => badFlash.set(false), 350);
@@ -350,10 +367,18 @@ export const StaffPage = () => {
           .watch(midiStatus, (n) => (n.el.textContent = midiStatus.get())),
       ),
     h("div")
-      .css("font-weight", "bold")
-      .css("color", "#7ddb7d")
       .css("padding", "0.25rem 0")
-      .watch(scoreSig, (n) => (n.el.textContent = scoreSig.get())),
+      .inner(
+        h("span")
+          .css("font-weight", "bold")
+          .css("color", "#15803d")
+          .watch(scoreSig, (n) => (n.el.textContent = scoreSig.get())),
+        h("span")
+          .css("font-weight", "bold")
+          .css("color", "#dc2626")
+          .css("margin-left", "0.75rem")
+          .watch(wrongSig, (n) => (n.el.textContent = wrongSig.get())),
+      ),
     staffDiv,
   );
 };

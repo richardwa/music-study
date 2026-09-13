@@ -204,12 +204,10 @@ const staffSvg = (
 
 // --- ui ---
 const Labeled = (label: string, control: RNode) =>
-  hbox()
-    .css("align-items", "center")
+  vbox()
+    .css("gap", "0.25rem")
     .inner(
-      h("label")
-        .css("color", "#666")
-        .inner(label + ":"),
+      h("label").css("color", "#666").css("font-size", "0.8rem").inner(label),
       control,
     );
 

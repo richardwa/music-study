@@ -3,13 +3,13 @@ import type { RNode, Signal } from "solid-vanilla";
 
 // --- staff geometry (px) ---
 const S = 12; // staff line spacing (one diatonic space)
-const VIEW_W = 840;
+const VIEW_W = 900;
 const STAFF1_TOP = 56; // treble staff
 const STAFF1_BOTTOM = STAFF1_TOP + 4 * S;
 const STAFF2_TOP = STAFF1_BOTTOM + 3 * S; // bass staff
 const STAFF2_BOTTOM = STAFF2_TOP + 4 * S;
 const BOTTOM_PAD = 9 * S; // room for ledger notes + labels below bass staff
-const X0 = 104;
+const X0 = 164;
 const NOTE_DX = 46;
 const NOTE_COUNT = 16;
 
@@ -45,7 +45,9 @@ const scaleNotes = (
       const target = 12 * (octave + 1) + LETTER_SEMIS[root] + semi;
       const n = (octave - 4) * 7 + letter;
       if (n < range[0] || n > range[1]) return;
-      out.push({ n, acc: (target - base) as -1 | 0 | 1 });
+      // reduce to nearest chromatic alteration: 13 -> 1, -11 -> 1, etc.
+      const acc = ((((target - base) % 12) + 18) % 12) - 6;
+      out.push({ n, acc: acc as -1 | 0 | 1 });
     });
   }
   return out.sort((a, b) => a.n - b.n);
@@ -94,6 +96,51 @@ const staffLines = (top: number) =>
 
 // accidental glyphs are ~centered on their baseline (font metrics)
 const ACC_GLYPH: Record<number, string> = { "1": "\uE262", "-1": "\uE260" };
+
+// --- key signature ---
+// one octave of the scale -> the accidentals that form the key signature,
+// placed at canonical key-signature staff positions (diatonic n, treble staff)
+const KS_SHARP_N = [10, 7, 11, 8, 5, 9, 6]; // F C G D A E B
+const KS_FLAT_N = [6, 9, 5, 8, 4, 7, 10]; // B E A D G C F
+
+const keySigNotes = (root: number, mode: ScaleMode): Note[] => {
+  // normalize a semitone delta (may wrap octaves) into -1 | 0 | 1
+  const normAcc = (d: number): -1 | 0 | 1 =>
+    ((((d % 12) + 18) % 12) - 6) as -1 | 0 | 1;
+  // one octave of the scale, reduced to one accidental per letter
+  const accByLetter: Record<number, -1 | 0 | 1> = {};
+  scaleNotes(root, mode, [0, 6]).forEach((nt) => {
+    const letter = ((nt.n % 7) + 7) % 7;
+    accByLetter[letter] = normAcc(nt.acc);
+  });
+  const isSharp = Object.values(accByLetter).some((a) => a === 1);
+  const table = isSharp ? KS_SHARP_N : KS_FLAT_N;
+  return table
+    .map((n) => {
+      const letter = ((n % 7) + 7) % 7;
+      return { n, acc: accByLetter[letter] ?? (0 as const) };
+    })
+    .filter((k) => k.acc !== 0);
+};
+
+const keySigSvg = (ks: Note[], mode: StaffMode) => {
+  const staves: ("treble" | "bass")[] =
+    mode === "both" ? ["treble", "bass"] : [mode];
+  return staves
+    .map((staff) =>
+      ks
+        .map((k, i) => {
+          const n = staff === "treble" ? k.n : k.n - 14; // one octave + a sixth down (treble F5 -> bass F3)
+          const y =
+            staffBottom(staff) -
+            stepOf(n, staff) * (S / 2) +
+            (ACC_CENTER[k.acc] * (S * 4)) / 1000;
+          return `<text x="${70 + i * 13}" y="${y.toFixed(1)}" font-size="${S * 4}" ${FONT}>${ACC_GLYPH[k.acc]}</text>`;
+        })
+        .join(""),
+    )
+    .join("");
+};
 const ACC_CENTER: Record<number, number> = { "1": 1, "-1": 132 }; // vertical center above baseline, units
 
 // head position of a note at slot x
@@ -138,11 +185,7 @@ const noteSvg = (
     step <= -2 || step >= 10
       ? `<line x1="${x - rx * 1.7}" y1="${y}" x2="${x + rx * 1.7}" y2="${y}" stroke="#000" stroke-width="1.2"/>`
       : "";
-  const accSize = S * 3;
-  const acc =
-    note.acc === 0
-      ? ""
-      : `<text x="${x - rx * 2.6}" y="${(y + (ACC_CENTER[note.acc] * accSize) / 1000).toFixed(1)}" font-size="${accSize}" ${FONT}>${ACC_GLYPH[note.acc]}</text>`;
+  // accidentals live in the key signature; note pitch is unaffected
   const labelY =
     staff === "treble"
       ? mode === "both"
@@ -152,7 +195,6 @@ const noteSvg = (
   const labelYAbs = labelY + dy;
   return [
     ledger,
-    acc,
     `<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" transform="rotate(-20 ${x} ${y})" fill="#111"/>`,
     `<line x1="${stemX}" y1="${y}" x2="${stemX}" y2="${stemEnd}" stroke="#111" stroke-width="1.6"/>`,
     ...(labels
@@ -170,6 +212,7 @@ const staffSvg = (
   labels: boolean,
   cursor: number,
   bad: boolean,
+  keySig: Note[] = [],
 ) => {
   const bold = FONT;
   const top1 = mode === "bass" ? STAFF2_TOP : STAFF1_TOP;
@@ -187,8 +230,11 @@ const staffSvg = (
     out += `<text x="26" y="${STAFF1_BOTTOM - S}" font-size="${S * 4}" ${bold}>&#xE050;</text>`;
   if (mode !== "treble")
     out += `<text x="26" y="${STAFF2_TOP + S}" font-size="${S * 4.4}" ${bold}>&#xE062;</text>`;
+  out += keySigSvg(keySig, mode);
   out += `<line x1="16" y1="${top1}" x2="16" y2="${bot}" stroke="#000" stroke-width="1.2"/>`;
+  // final barline: thick + thin
   out += `<line x1="${VIEW_W - 16}" y1="${top1}" x2="${VIEW_W - 16}" y2="${bot}" stroke="#000" stroke-width="1.2"/>`;
+  out += `<line x1="${VIEW_W - 22}" y1="${top1}" x2="${VIEW_W - 22}" y2="${bot}" stroke="#000" stroke-width="4"/>`;
   // bar lines between groups of 4 notes
   for (let k = 1; k * 4 < NOTE_COUNT; k++) {
     const x = X0 + k * 4 * NOTE_DX - NOTE_DX / 2;
@@ -226,6 +272,7 @@ export const StaffPage = () => {
   const labels = signal("on").persistAs("music-study:labels");
   const midiStatus = signal("midi: …");
   const notesSig = signal<Note[]>([]);
+  const keySigSig = signal<Note[]>([]);
   const cursor = signal(0);
   const badFlash = signal(false);
   const scoreSig = signal("");
@@ -252,9 +299,14 @@ export const StaffPage = () => {
   };
 
   // regenerate on config change
-  h("div").watch([staffMode, root, scaleMode], () => genNotes());
+  h("div").watch([staffMode, root, scaleMode], () => {
+    keySigSig.set(
+      keySigNotes(NAMES.indexOf(root.get()), scaleMode.get() as ScaleMode),
+    );
+    genNotes();
+  });
 
-  const staffDiv = h("div");
+  const staffDiv = h("div").css("padding", "0 1.5rem");
   const redraw = () => {
     staffDiv.el.innerHTML = staffSvg(
       notesSig.get(),
@@ -262,9 +314,10 @@ export const StaffPage = () => {
       labels.get() === "on",
       cursor.get(),
       badFlash.get(),
+      keySigSig.get(),
     );
   };
-  staffDiv.watch([notesSig, cursor, labels, badFlash], redraw);
+  staffDiv.watch([notesSig, cursor, labels, badFlash, keySigSig], redraw);
 
   // --- midi ---
   let midiAccess: any;
@@ -339,6 +392,10 @@ export const StaffPage = () => {
     }
   };
   setupMidi();
+
+  keySigSig.set(
+    keySigNotes(NAMES.indexOf(root.get()), scaleMode.get() as ScaleMode),
+  );
 
   // --- practice session ---
   const startBtn = button()

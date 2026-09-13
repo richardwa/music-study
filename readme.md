@@ -18,7 +18,7 @@ play them on a MIDI keyboard in order, and the session scores your key presses.
 
 ## Commands
 - `bun install`
-- `bun run dev` — dev server on port 5178
+- `bun run dev` — dev server on port 5173
 - `bun run build` — typecheck + build to `docs/`
 
 ## GitHub Pages
